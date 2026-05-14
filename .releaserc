@@ -23,14 +23,6 @@
         "assets": ["README.md","CHANGELOG.md","package.json"]
       }
     ],
-    [
-      "@codedependant/semantic-release-docker",
-      {
-        "dockerTags": ["latest", "{{version}}"],
-        "dockerRegistry": "${REGISTRY_HOST}",
-        "dockerProject": "prd"
-      }
-    ],
     "@semantic-release/github"
   ]
 }

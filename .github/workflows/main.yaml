@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 env:
   IMAGE_NAME: test-pipeline
   REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
@@ -73,9 +78,6 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
-      DOCKER_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
@@ -91,11 +93,12 @@ jobs:
         run: |
           npm install --no-save \
             semantic-release \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
             @semantic-release/changelog \
             @semantic-release/git \
             @semantic-release/github \
-            @semantic-release/npm \
-            @codedependant/semantic-release-docker
+            @semantic-release/npm
 
       - name: Run semantic-release
         run: npx semantic-release --debug
