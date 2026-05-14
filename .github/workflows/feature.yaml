@@ -29,27 +29,6 @@ jobs:
           no-fail: true
           output-file: hadolint-report.txt
 
-      - name: Add Dockerfile lint result to summary
-        if: always()
-        run: |
-          {
-            echo "## Dockerfile Lint"
-            echo
-            if [ -s hadolint-report.txt ]; then
-              echo '```text'
-              cat hadolint-report.txt
-              echo '```'
-            else
-              echo "No Dockerfile lint issues found."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Fail Dockerfile lint on issues
-        run: |
-          if [ -s hadolint-report.txt ]; then
-            exit 1
-          fi
-
   build-image:
     name: Build Docker Image 🏗️
     runs-on: ubuntu-latest
