@@ -70,8 +70,6 @@ jobs:
     name: Promote to Prod 🚀
     runs-on: ubuntu-latest
     needs: vulnerability-scans
-    outputs:
-      image_ref: ${{ steps.vars.outputs.image_ref }}
     steps:
       - name: Install Crane
         run: |
@@ -88,15 +86,9 @@ jobs:
           username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ env.REGISTRY_PASSWORD }}
 
-      - name: Set prod image reference
-        id: vars
-        run: |
-          image_ref="${REGISTRY_HOST}/prd/${IMAGE_NAME}:latest"
-          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
-
       - name: Promote Stage image to Prod using Crane
         run: |
-          crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ steps.vars.outputs.image_ref }}
+          crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:latest
 
   cosign:
     name: Sign Prod Image with Cosign 🔏
@@ -114,7 +106,7 @@ jobs:
         uses: sigstore/cosign-installer@v4.1.2
 
       - name: Sign image with Cosign
-        run: cosign sign --yes --key env://COSIGN_KEY ${{ needs.crane.outputs.image_ref }}
+        run: cosign sign --yes --key env://COSIGN_KEY ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:latest
 
   semantic-release:
     name: Semantic Release 🚀
