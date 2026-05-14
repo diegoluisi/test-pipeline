@@ -1,11 +1,15 @@
 schemaVersion: "2.0.0"
 
 fileExistenceTests:
-  - path: /app
+  - name: App directory exists
+    path: /app
+    shouldExist: true
+  - name: Application binary exists
+    path: /app/hello
     shouldExist: true
 
 commandTests:
   - name: Check application present
-    command: ["sh", "-c", "test -d /app || test -f /app"]
-    expectedOutput: ""
-    expectedExitCode: 0
+    command: "test"
+    args: ["-x", "/app/hello"]
+    exitCode: 0
