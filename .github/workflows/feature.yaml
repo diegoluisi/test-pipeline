@@ -39,10 +39,6 @@ jobs:
             else
               echo "| \`make product-level-test\` | Failed |"
             fi
-            echo
-            echo '```text'
-            cat product-level-test.log
-            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
           exit "$test_status"
