@@ -16,7 +16,19 @@ env:
   IMAGE_NAME: test-pipeline
 
 jobs:
-  pr-check:
+  lint-dockerfile:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v2
+        with:
+          dockerfile: Dockerfile
+
+  build-pr-image:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -26,11 +38,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v2
-        with:
-          dockerfile: Dockerfile
-
       - name: Build image for PR validation
         uses: docker/build-push-action@v5
         with:
@@ -38,12 +45,25 @@ jobs:
           push: false
           tags: ${{ github.repository }}:${{ github.sha }}-pr
 
+  scan-vulnerabilities:
+    if: github.event_name == 'pull_request'
+    needs: build-pr-image
+    runs-on: ubuntu-latest
+    steps:
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@v2
         with:
           image-ref: ${{ github.repository }}:${{ github.sha }}-pr
           format: table
           exit-code: '1'
+
+  generate-sbom:
+    if: github.event_name == 'pull_request'
+    needs: build-pr-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Install Syft for SBOM generation
         run: |
@@ -59,6 +79,11 @@ jobs:
           name: sbom
           path: sbom.json
 
+  test-container-structure:
+    if: github.event_name == 'pull_request'
+    needs: build-pr-image
+    runs-on: ubuntu-latest
+    steps:
       - name: Install container structure test
         run: |
           curl -Lo /usr/local/bin/container-structure-test https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.8.1/container-structure-test-linux-amd64
