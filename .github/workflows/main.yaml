@@ -73,18 +73,10 @@ jobs:
           exit 1
 
   crane:
-    name: Promote to Prod 🚀
+    name: Promote, Attach SBOM, and Sign Prod Image 🚀
     runs-on: ubuntu-latest
     needs: vulnerability-scans
     steps:
-      - name: Install Crane
-        run: |
-          curl --fail --location --show-error --output crane.tar.gz https://github.com/google/go-containerregistry/releases/download/v0.19.0/go-containerregistry_Linux_x86_64.tar.gz
-          tar -xzf crane.tar.gz crane
-          chmod +x crane
-          sudo mv crane /usr/local/bin/
-          crane version
-
       - name: Log in to registry
         uses: docker/login-action@v4
         with:
@@ -99,58 +91,37 @@ jobs:
           image_ref="${REGISTRY_HOST}/prd/${IMAGE_NAME}:${short_sha}"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
-      - name: Promote Stage image to Prod
-        run: |
-          docker pull ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging
-          docker tag ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ steps.prod_image.outputs.image_ref }}
-          docker push ${{ steps.prod_image.outputs.image_ref }}
-
-  cosign:
-    name: Attach SBOM and Sign Prod Image 🔏
-    runs-on: ubuntu-latest
-    needs: crane
-    steps:
-      - name: Log in to registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY_HOST }}
-          username: ${{ env.REGISTRY_USERNAME }}
-          password: ${{ env.REGISTRY_PASSWORD }}
-
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.1.2
-
-      - name: Install Crane
-        run: |
-          curl --fail --location --show-error --output crane.tar.gz https://github.com/google/go-containerregistry/releases/download/v0.19.0/go-containerregistry_Linux_x86_64.tar.gz
-          tar -xzf crane.tar.gz crane
-          chmod +x crane
-          sudo mv crane /usr/local/bin/
-          crane version
 
       - name: Install Syft
         run: |
           curl --fail --silent --show-error --location https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
           syft version
 
-      - name: Resolve prod image digest
-        id: prod_image
+      - name: Promote Stage image to Prod
+        id: promote
         run: |
-          short_sha="${GITHUB_SHA::7}"
-          image="${REGISTRY_HOST}/prd/${IMAGE_NAME}:${short_sha}"
-          echo "Resolving digest for ${image}"
-          digest="$(crane digest "$image")"
+          docker pull ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging
+          docker tag ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ steps.prod_image.outputs.image_ref }}
+          docker push ${{ steps.prod_image.outputs.image_ref }} | tee docker-push.log
+
+          digest="$(grep -Eo 'digest: sha256:[a-f0-9]+' docker-push.log | tail -n 1 | awk '{print $2}')"
+          if [ -z "$digest" ]; then
+            echo "Could not find pushed image digest in docker push output."
+            exit 1
+          fi
+
           image_digest="${REGISTRY_HOST}/prd/${IMAGE_NAME}@${digest}"
 
-          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "image=${{ steps.prod_image.outputs.image_ref }}" >> "$GITHUB_OUTPUT"
           echo "image_digest=${image_digest}" >> "$GITHUB_OUTPUT"
 
-      - name: Generate and attach SBOM
+      - name: Generate SBOM from local image
         run: |
           set -x
-          syft ${{ steps.prod_image.outputs.image_digest }} -o spdx-json=sbom.spdx.json
+          syft docker:${{ steps.prod_image.outputs.image_ref }} -o spdx-json=sbom.spdx.json
           test -s sbom.spdx.json
-          cosign attach sbom --sbom sbom.spdx.json ${{ steps.prod_image.outputs.image_digest }}
 
       - name: Sign image digest with Cosign
         run: |
@@ -159,7 +130,7 @@ jobs:
             exit 1
           fi
 
-          cosign sign --yes --key env://COSIGN_KEY ${{ steps.prod_image.outputs.image_digest }}
+          cosign sign --yes --key env://COSIGN_KEY ${{ steps.promote.outputs.image_digest }}
 
       - name: Verify Cosign signature
         run: |
@@ -168,7 +139,10 @@ jobs:
             exit 1
           fi
 
-          cosign verify --key env://COSIGN_PUBLIC_KEY ${{ steps.prod_image.outputs.image_digest }}
+          cosign verify --key env://COSIGN_PUBLIC_KEY ${{ steps.promote.outputs.image_digest }}
+
+      - name: Attach SBOM to signed image
+        run: cosign attach sbom --sbom sbom.spdx.json ${{ steps.promote.outputs.image_digest }}
 
       - name: Add signing result to summary
         if: always()
@@ -178,14 +152,14 @@ jobs:
             echo
             echo "| Item | Value |"
             echo "| --- | --- |"
-            echo "| Image | \`${{ steps.prod_image.outputs.image }}\` |"
-            echo "| Digest | \`${{ steps.prod_image.outputs.image_digest }}\` |"
+            echo "| Image | \`${{ steps.promote.outputs.image }}\` |"
+            echo "| Digest | \`${{ steps.promote.outputs.image_digest }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   semantic-release:
     name: Semantic Release 🚀
     runs-on: ubuntu-latest
-    needs: cosign
+    needs: crane
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
