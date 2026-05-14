@@ -17,10 +17,11 @@ jobs:
     steps:
       - name: Install Crane
         run: |
-          curl -Lo crane.tar.gz https://github.com/google/go-containerregistry/releases/download/v0.19.0/go-containerregistry_Linux_x86_64.tar.gz
+          curl --fail --location --show-error --output crane.tar.gz https://github.com/google/go-containerregistry/releases/download/v0.19.0/go-containerregistry_Linux_x86_64.tar.gz
           tar -xzf crane.tar.gz crane
           chmod +x crane
           sudo mv crane /usr/local/bin/
+          crane version
 
       - name: Log in to registry
         uses: docker/login-action@v4
@@ -32,14 +33,36 @@ jobs:
       - name: Get short SHA
         run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      - name: Promote Dev image to Stage using Crane
+      - name: Promote Dev image to Stage
         run: |
           crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
+          crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging
 
       - name: Scan Stage image for vulnerabilities
+        id: trivy
+        continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
           format: table
+          output: trivy-report.txt
           exit-code: '1'
-    
+
+      - name: Add vulnerability scan result to summary
+        if: always()
+        run: |
+          {
+            echo "## Stage Vulnerability Scan"
+            echo
+            if [ -s trivy-report.txt ]; then
+              echo '```text'
+              cat trivy-report.txt
+              echo '```'
+            else
+              echo "No vulnerability scan findings reported."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail vulnerability scan on findings
+        if: steps.trivy.outcome == 'failure'
+        run: exit 1
