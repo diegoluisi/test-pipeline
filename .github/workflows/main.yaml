@@ -66,10 +66,44 @@ jobs:
           fi
           exit 1
 
+  semantic-release:
+    name: Semantic Release 🚀
+    runs-on: ubuntu-latest
+    needs: vulnerability-scans
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
+      DOCKER_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install semantic-release
+        run: |
+          npm install --no-save \
+            semantic-release \
+            @semantic-release/changelog \
+            @semantic-release/git \
+            @semantic-release/github \
+            @semantic-release/npm \
+            @codedependant/semantic-release-docker
+
+      - name: Run semantic-release
+        run: npx semantic-release --debug
+
   crane:
     name: Promote to Prod 🚀
     runs-on: ubuntu-latest
-    needs: vulnerability-scans
+    needs: semantic-release
     steps:
       - name: Install Crane
         run: |
@@ -107,29 +141,3 @@ jobs:
 
       - name: Sign image with Cosign
         run: cosign sign --yes --key env://COSIGN_KEY ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:latest
-
-  semantic-release:
-    name: Semantic Release 🚀
-    needs: cosign
-    runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
-      DOCKER_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6.0.2
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install semantic-release
-        run: npm install -g semantic-release @semantic-release/git @codedependant/semantic-release-docker
-
-      - name: Run semantic-release
-        run: npx semantic-release
