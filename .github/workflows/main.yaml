@@ -14,9 +14,12 @@ env:
   COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
 
 jobs:
-  promote-to-prod:
+  crane:
     name: Promote to Prod 🚀
     runs-on: ubuntu-latest
+    outputs:
+      image-ref: ${{ steps.vars.outputs.image_ref }}
+      short-sha: ${{ steps.vars.outputs.short_sha }}
     steps:
       - name: Install Crane
         run: |
@@ -37,29 +40,76 @@ jobs:
         id: vars
         run: |
           short_sha="${GITHUB_SHA::7}"
+          image_ref="${REGISTRY_HOST}/prd/${IMAGE_NAME}:${short_sha}-prd"
           echo "SHORT_SHA=${short_sha}" >> "$GITHUB_ENV"
           echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Promote Stage image to Prod using Crane
         run: |
-          crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
+          crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ steps.vars.outputs.image_ref }}
 
+  vulnerability-scans:
+    name: Vulnerability Scans 🛡
+    runs-on: ubuntu-latest
+    needs: crane
+    steps:
       - name: Scan Prod image for vulnerabilities
+        id: trivy
+        continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}-prd
+          image-ref: ${{ needs.crane.outputs.image-ref }}
           format: table
+          output: trivy-report.txt
           exit-code: '1'
 
-      - name: cosign-installer
+      - name: Add vulnerability scan result to summary
+        if: always()
+        run: |
+          {
+            echo "## Prod Vulnerability Scan"
+            echo
+            if [ -s trivy-report.txt ]; then
+              echo '```text'
+              cat trivy-report.txt
+              echo '```'
+            elif [ "${{ steps.trivy.outcome }}" = "failure" ]; then
+              echo "Trivy failed before producing a report."
+              echo
+              echo "Image: \`${{ needs.crane.outputs.image-ref }}\`"
+            else
+              echo "No vulnerability scan findings reported."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail vulnerability scan on findings
+        if: steps.trivy.outcome == 'failure'
+        run: exit 1
+
+  cosign:
+    name: Sign Prod Image with Cosign 🔏
+    runs-on: ubuntu-latest
+    needs:
+      - crane
+      - vulnerability-scans
+    steps:
+      - name: Log in to registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+
+      - name: Install Cosign
         uses: sigstore/cosign-installer@v2.0.0
 
       - name: Sign image with Cosign
-        run: cosign sign --key cosign.key ${{ env.REGISTRY_HOST }}/${{ github.actor }}/${{ env.IMAGE_NAME }}:${{ github.run_id }}
+        run: cosign sign --yes --key env://COSIGN_KEY ${{ needs.crane.outputs.image-ref }}
 
   semantic-release:
     name: Semantic Release 🚀
-    needs: promote-to-prod
+    needs: cosign
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
