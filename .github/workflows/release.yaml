@@ -13,7 +13,7 @@ env:
 
 jobs:
   promote-to-stage:
-    name: Promote to Image to Staging 🏗   ️
+    name: Promote to Staging 🏗
     runs-on: ubuntu-latest
     steps:
       - name: Install Crane

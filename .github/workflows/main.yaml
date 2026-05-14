@@ -1,4 +1,4 @@
-name: Main Pipeline
+name: Main Workflow 🚀
 
 on:
   push:
@@ -15,6 +15,7 @@ env:
 
 jobs:
   promote-to-prod:
+    name: Promote to Prod 🚀
     runs-on: ubuntu-latest
     steps:
       - name: Install Crane
@@ -41,17 +42,17 @@ jobs:
 
       - name: Promote Stage image to Prod using Crane
         run: |
-          crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}-prd
+          crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
 
       - name: Scan Prod image for vulnerabilities
-        uses: aquasecurity/trivy-action@v2
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}-prd
           format: table
           exit-code: '1'
 
       - name: Sign Prod image with Cosign
-        uses: sigstore/cosign-action@v2
+        uses: sigstore/cosign-action@v2.0.0
         with:
           command: sign
           image: ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}-prd
@@ -59,6 +60,7 @@ jobs:
           password: ${{ env.COSIGN_PASSWORD }}
 
   semantic-release:
+    name: Semantic Release 🚀
     needs: promote-to-prod
     runs-on: ubuntu-latest
     env:
