@@ -72,42 +72,10 @@ jobs:
           fi
           exit 1
 
-  semantic-release:
-    name: Semantic Release 🚀
-    runs-on: ubuntu-latest
-    needs: vulnerability-scans
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6.0.2
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-
-      - name: Install semantic-release
-        run: |
-          npm install --no-save \
-            semantic-release \
-            @semantic-release/commit-analyzer \
-            @semantic-release/release-notes-generator \
-            @semantic-release/changelog \
-            @semantic-release/git \
-            @semantic-release/github \
-            @semantic-release/npm
-
-      - name: Run semantic-release
-        run: npx semantic-release --debug
-
   crane:
     name: Promote to Prod 🚀
     runs-on: ubuntu-latest
-    needs: semantic-release
+    needs: vulnerability-scans
     steps:
       - name: Install Crane
         run: |
@@ -176,3 +144,35 @@ jobs:
 
       - name: Verify Cosign signature
         run: cosign verify --key env://COSIGN_PUBLIC_KEY ${{ steps.prod_image.outputs.image_digest }}
+
+  semantic-release:
+    name: Semantic Release 🚀
+    runs-on: ubuntu-latest
+    needs: cosign
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install semantic-release
+        run: |
+          npm install --no-save \
+            semantic-release \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/changelog \
+            @semantic-release/git \
+            @semantic-release/github \
+            @semantic-release/npm
+
+      - name: Run semantic-release
+        run: npx semantic-release --debug

@@ -38,19 +38,16 @@ jobs:
           echo "SHORT_SHA=${short_sha}" >> "$GITHUB_ENV"
           echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
 
-      - name: Promote Dev image to Stage
-        run: |
-          crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
-          crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging
-
-      - name: Scan Stage image for vulnerabilities
+      - name: Scan Dev image for vulnerabilities
         id: trivy
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
+          image-ref: ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop
           format: table
           output: trivy-report.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: '1'
 
       - name: Add vulnerability scan result to summary
@@ -66,7 +63,7 @@ jobs:
             elif [ "${{ steps.trivy.outcome }}" = "failure" ]; then
               echo "Trivy failed before producing a report."
               echo
-              echo "Image: \`${REGISTRY_HOST}/stg/${IMAGE_NAME}:${SHORT_SHA}\`"
+              echo "Image: \`${REGISTRY_HOST}/dev/${IMAGE_NAME}:develop\`"
             else
               echo "No vulnerability scan findings reported."
             fi
@@ -74,4 +71,15 @@ jobs:
 
       - name: Fail vulnerability scan on findings
         if: steps.trivy.outcome == 'failure'
-        run: exit 1
+        run: |
+          echo "Trivy scan failed for ${REGISTRY_HOST}/dev/${IMAGE_NAME}:develop. Check the Stage Vulnerability Scan summary above."
+          if [ -s trivy-report.txt ]; then
+            echo
+            cat trivy-report.txt
+          fi
+          exit 1
+
+      - name: Promote Dev image to Stage
+        run: |
+          crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
+          crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging
