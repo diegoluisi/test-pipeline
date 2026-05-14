@@ -23,7 +23,7 @@ jobs:
           sudo mv crane /usr/local/bin/
 
       - name: Log in to registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY_HOST }}
           username: ${{ env.REGISTRY_USERNAME }}
