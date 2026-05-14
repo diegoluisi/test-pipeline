@@ -37,7 +37,7 @@ jobs:
           crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:latest-dev ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}-stg
 
       - name: Scan Stage image for vulnerabilities
-        uses: aquasecurity/trivy-action@v2
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
           format: table

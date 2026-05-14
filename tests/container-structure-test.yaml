@@ -1,9 +1,11 @@
 schemaVersion: "2.0.0"
 
 fileExistenceTests:
-  - path: /app
+  - name: App directory exists
+    path: /app
     shouldExist: true
-  - path: /app/hello
+  - name: Application binary exists
+    path: /app/hello
     shouldExist: true
 
 commandTests:
