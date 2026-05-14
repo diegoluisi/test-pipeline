@@ -101,9 +101,11 @@ jobs:
           image_ref="${REGISTRY_HOST}/prd/${IMAGE_NAME}:${short_sha}"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
-      - name: Promote Stage image to Prod using Crane
+      - name: Promote Stage image to Prod
         run: |
-          crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ steps.prod_image.outputs.image_ref }}
+          docker pull ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging
+          docker tag ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ steps.prod_image.outputs.image_ref }}
+          docker push ${{ steps.prod_image.outputs.image_ref }}
 
   cosign:
     name: Attach SBOM and Sign Prod Image 🔏
