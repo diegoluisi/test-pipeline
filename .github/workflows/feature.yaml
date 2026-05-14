@@ -1,9 +1,6 @@
 name: Feature Workflow 🌱
 
 on:
-  pull_request:
-    branches:
-      - develop
   push:
     branches:
       - 'feat/**'
