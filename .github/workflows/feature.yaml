@@ -198,18 +198,18 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ github.repository }}:${{ github.sha }}
-          format: 'json'
-          output: 'trivy-report.json'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          exit-code: '0' # Don't fail here; we already enforced exit-code:1 above
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
 
-      - name: Upload scan report as artifact
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
-        uses: actions/upload-artifact@v7.0.1
         with:
-          name: trivy-scan-report
-          path: trivy-report.json
-          retention-days: 30
+          sarif_file: 'trivy-results.sarif'
 
   sbom-report:
     name: Generate SBOM 📊
