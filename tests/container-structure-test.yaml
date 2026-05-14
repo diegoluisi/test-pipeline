@@ -1,0 +1,11 @@
+schemaVersion: "2.0.0"
+
+fileExistenceTests:
+  - path: /app
+    shouldExist: true
+
+commandTests:
+  - name: Check application present
+    command: ["sh", "-c", "test -d /app || test -f /app"]
+    expectedOutput: ""
+    expectedExitCode: 0
