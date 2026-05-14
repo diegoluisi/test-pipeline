@@ -1,13 +1,9 @@
 name: Feature Workflow 🌱
 
 on:
-  push:
+  pull_request:
     branches:
-      - 'feat/**'
-      - 'feature/**'
-      - 'hotfix/**'
-      - 'fix/**'
-      - 'chore/**'
+      - 'develop'
 
 env:
   IMAGE_NAME: test-pipeline
@@ -55,7 +51,7 @@ jobs:
         run: docker save ${{ github.repository }}:${{ github.sha }} -o image.tar
 
       - name: Upload image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: pr-image
           path: image.tar
@@ -66,7 +62,7 @@ jobs:
     needs: build-image
     steps:
       - name: Download image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           name: pr-image
 
@@ -111,7 +107,7 @@ jobs:
         uses: actions/checkout@v6.0.2
 
       - name: Download image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           name: pr-image
 
@@ -127,7 +123,7 @@ jobs:
           syft . -o json > sbom.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: sbom
           path: sbom.json
@@ -141,7 +137,7 @@ jobs:
         uses: actions/checkout@v6.0.2
 
       - name: Download image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           name: pr-image
 
