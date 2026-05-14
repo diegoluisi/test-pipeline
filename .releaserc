@@ -1,0 +1,36 @@
+{
+  "branches": "main",
+  "debug": "true",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "CHANGELOG.md",
+        "changelogTitle": "# Semantic Versioning Changelog"
+      }
+    ],
+    [
+      "@semantic-release/npm",
+      {
+        "npmPublish": false
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["README.md","CHANGELOG.md","package.json"]
+      }
+    ],
+    [
+      "@codedependant/semantic-release-docker",
+      {
+        "dockerTags": ["latest", "{{version}}"],
+        "dockerRegistry": "${REGISTRY_HOST}",
+        "dockerProject": "prd"
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}

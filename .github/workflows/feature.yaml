@@ -1,0 +1,70 @@
+name: Feature Image Pipeline
+
+on:
+  pull_request:
+    branches:
+      - develop
+  push:
+    branches:
+      - 'feat/**'
+      - 'feature/**'
+      - 'hotfix/**'
+      - 'fix/**'
+      - 'chore/**'
+
+env:
+  IMAGE_NAME: test-pipeline
+
+jobs:
+  pr-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v2
+        with:
+          dockerfile: Dockerfile
+
+      - name: Build image for PR validation
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ github.repository }}:${{ github.sha }}-pr
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@v2
+        with:
+          image-ref: ${{ github.repository }}:${{ github.sha }}-pr
+          format: table
+          exit-code: '1'
+
+      - name: Install Syft for SBOM generation
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM
+        run: |
+          syft . -o json > sbom.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+      - name: Install container structure test
+        run: |
+          curl -Lo /usr/local/bin/container-structure-test https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.8.1/container-structure-test-linux-amd64
+          chmod +x /usr/local/bin/container-structure-test
+
+      - name: Run container structure test
+        run: |
+          /usr/local/bin/container-structure-test test --image ${{ github.repository }}:${{ github.sha }}-pr --config tests/container-structure-test.yaml
+
