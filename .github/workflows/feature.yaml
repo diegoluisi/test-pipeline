@@ -1,9 +1,13 @@
 name: Feature Workflow 🌱
 
 on:
-  pull_request:
+  push:
     branches:
-      - develop
+      - 'feat/**'
+      - 'feature/**'
+      - 'hotfix/**'
+      - 'fix/**'
+      - 'chore/**'
 
 env:
   IMAGE_NAME: test-pipeline
@@ -53,13 +57,13 @@ jobs:
           context: .
           push: false
           load: true
-          tags: ${{ github.repository }}:${{ github.sha }}-pr
+          tags: ${{ github.repository }}:${{ github.sha }}
 
       - name: Verify image exists
-        run: docker inspect ${{ github.repository }}:${{ github.sha }}-pr
+        run: docker inspect ${{ github.repository }}:${{ github.sha }}
 
       - name: Save Docker image
-        run: docker save ${{ github.repository }}:${{ github.sha }}-pr -o image.tar
+        run: docker save ${{ github.repository }}:${{ github.sha }} -o image.tar
 
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
@@ -163,4 +167,4 @@ jobs:
 
       - name: Run container structure test
         run: |
-          /usr/local/bin/container-structure-test test --image ${{ github.repository }}:${{ github.sha }}-pr --config tests/container-structure-test.yaml
+          /usr/local/bin/container-structure-test test --image ${{ github.repository }}:${{ github.sha }} --config tests/container-structure-test.yaml
