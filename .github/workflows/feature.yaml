@@ -1,13 +1,9 @@
 name: Feature Workflow 🌱
 
 on:
-  push:
+  pull_request:
     branches:
-      - 'feat/**'
-      - 'feature/**'
-      - 'hotfix/**'
-      - 'fix/**'
-      - 'chore/**'
+      - develop
 
 env:
   IMAGE_NAME: test-pipeline
