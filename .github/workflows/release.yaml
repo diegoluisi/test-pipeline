@@ -1,9 +1,9 @@
-name: Release Pipeline
+name: Release Pipeline 📦
 
 on:
   push:
     branches:
-      - release
+      - release/**
 
 env:
   IMAGE_NAME: test-pipeline
@@ -34,7 +34,7 @@ jobs:
 
       - name: Promote Dev image to Stage using Crane
         run: |
-          crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:latest-dev ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}-stg
+          crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
 
       - name: Scan Stage image for vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
