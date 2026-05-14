@@ -24,9 +24,31 @@ jobs:
         uses: actions/checkout@v6.0.2
 
       - name: Lint Dockerfile
+        id: hadolint
+        continue-on-error: true
         uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile
+          output-file: hadolint-report.txt
+
+      - name: Add Dockerfile lint result to summary
+        if: always()
+        run: |
+          {
+            echo "## Dockerfile Lint"
+            echo
+            if [ -s hadolint-report.txt ]; then
+              echo '```text'
+              cat hadolint-report.txt
+              echo '```'
+            else
+              echo "No Dockerfile lint issues found."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail Dockerfile lint on issues
+        if: steps.hadolint.outcome == 'failure'
+        run: exit 1
 
   build-image:
     name: Build Docker Image 🏗️
@@ -73,11 +95,33 @@ jobs:
         run: docker load < image.tar
 
       - name: Scan image for vulnerabilities
+        id: trivy
+        continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ github.repository }}:${{ github.sha }}-pr
           format: table
+          output: trivy-report.txt
           exit-code: '1'
+
+      - name: Add vulnerability scan result to summary
+        if: always()
+        run: |
+          {
+            echo "## Vulnerability Scan"
+            echo
+            if [ -s trivy-report.txt ]; then
+              echo '```text'
+              cat trivy-report.txt
+              echo '```'
+            else
+              echo "No vulnerability scan findings reported."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail vulnerability scan on findings
+        if: steps.trivy.outcome == 'failure'
+        run: exit 1
 
   sbom-report:
     name: Generate SBOM 📊
@@ -127,8 +171,9 @@ jobs:
 
       - name: Install container structure test
         run: |
-          curl -Lo /usr/local/bin/container-structure-test https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.8.1/container-structure-test-linux-amd64
+          curl --fail --location --show-error --output /usr/local/bin/container-structure-test https://github.com/GoogleContainerTools/container-structure-test/releases/latest/download/container-structure-test-linux-amd64
           chmod +x /usr/local/bin/container-structure-test
+          /usr/local/bin/container-structure-test version
 
       - name: Run container structure test
         run: |
