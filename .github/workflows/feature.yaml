@@ -27,57 +27,8 @@ jobs:
         uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile
-          format: tty
-          no-color: true
-          output-file: hadolint-report.txt
-
-      - name: Add Dockerfile lint result to summary
-        if: always()
-        run: |
-          {
-            echo "## Dockerfile Lint"
-            echo
-            if [ -s hadolint-report.txt ]; then
-              echo '```text'
-              cat hadolint-report.txt
-              echo '```'
-            else
-              echo "No Dockerfile lint issues found."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          {
-            echo "HADOLINT_RESULTS<<EOF"
-            if [ -s hadolint-report.txt ]; then
-              cat hadolint-report.txt
-            else
-              echo "No Dockerfile lint issues found."
-            fi
-            echo "EOF"
-          } >> "$GITHUB_ENV"
-
-      - name: Comment Dockerfile lint result
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const output = `
-            #### Hadolint: \`${{ steps.hadolint.outcome }}\`
-            \`\`\`
-            ${process.env.HADOLINT_RESULTS}
-            \`\`\`
-            `;
-
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
-
-      - name: Fail Dockerfile lint on issues
-        if: steps.hadolint.outcome == 'failure'
-        run: exit 1
+          format: sarif
+          output-file: hadolint-results.sarif
 
   build-image:
     name: Build Docker Image 🏗️
