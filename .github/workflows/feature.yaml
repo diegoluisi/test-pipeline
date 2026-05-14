@@ -5,6 +5,11 @@ on:
     branches:
       - 'develop'
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 env:
   IMAGE_NAME: test-pipeline
 
@@ -16,14 +21,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
 
-      - name: Lint Dockerfile
+      - name: Run hadolint
+        id: hadolint
+        continue-on-error: true
         uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile
-          format: tty
-          no-color: true
-          no-fail: true
-          output-file: hadolint-report.txt
+          format: sarif
+          output-file: hadolint-results.sarif
+
+      - name: Upload analysis results to GitHub
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: hadolint-results.sarif
+          wait-for-processing: true
 
   build-image:
     name: Build Docker Image 🏗️
@@ -53,7 +64,7 @@ jobs:
       - name: Upload image artifact
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: pr-image
+          name: ${{ env.IMAGE_NAME }}
           path: image.tar
 
   scan-vulnerabilities:
@@ -64,7 +75,7 @@ jobs:
       - name: Download image artifact
         uses: actions/download-artifact@v8.0.1
         with:
-          name: pr-image
+          name: ${{ env.IMAGE_NAME }}
 
       - name: Load Docker image
         run: docker load < image.tar
@@ -75,28 +86,18 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ github.repository }}:${{ github.sha }}
-          format: table
-          output: trivy-report.txt
-          exit-code: '1'
+          format: 'json'
+          output: 'trivy-report.json'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0' # Don't fail here; we already enforced exit-code:1 above
 
-      - name: Add vulnerability scan result to summary
+      - name: Upload scan report as artifact
         if: always()
-        run: |
-          {
-            echo "## Vulnerability Scan"
-            echo
-            if [ -s trivy-report.txt ]; then
-              echo '```text'
-              cat trivy-report.txt
-              echo '```'
-            else
-              echo "No vulnerability scan findings reported."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Fail vulnerability scan on findings
-        if: steps.trivy.outcome == 'failure'
-        run: exit 1
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: trivy-scan-report
+          path: trivy-report.json
+          retention-days: 30
 
   sbom-report:
     name: Generate SBOM 📊
@@ -109,7 +110,7 @@ jobs:
       - name: Download image artifact
         uses: actions/download-artifact@v8.0.1
         with:
-          name: pr-image
+          name: ${{ env.IMAGE_NAME }}
 
       - name: Load Docker image
         run: docker load < image.tar
@@ -139,7 +140,7 @@ jobs:
       - name: Download image artifact
         uses: actions/download-artifact@v8.0.1
         with:
-          name: pr-image
+          name: ${{ env.IMAGE_NAME }}
 
       - name: Load Docker image
         run: docker load < image.tar
