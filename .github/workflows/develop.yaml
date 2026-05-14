@@ -39,5 +39,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}-dev
-            ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:latest-dev
+            ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
+            ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:dev

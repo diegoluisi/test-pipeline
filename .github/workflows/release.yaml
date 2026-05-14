@@ -39,6 +39,7 @@ jobs:
       - name: Scan Stage image for vulnerabilities
         uses: aquasecurity/trivy-action@v2
         with:
-          image-ref: ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}-stg
+          image-ref: ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
           format: table
           exit-code: '1'
+    
