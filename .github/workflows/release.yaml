@@ -1,0 +1,77 @@
+name: Release Pipeline 📦
+
+on:
+  push:
+    branches:
+      - release/**
+
+env:
+  IMAGE_NAME: test-pipeline
+  REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
+  REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+  REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+
+jobs:
+  promote-to-stage:
+    name: Promote to Image to Staging 🏗   ️
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Crane
+        run: |
+          curl --fail --location --show-error --output crane.tar.gz https://github.com/google/go-containerregistry/releases/download/v0.19.0/go-containerregistry_Linux_x86_64.tar.gz
+          tar -xzf crane.tar.gz crane
+          chmod +x crane
+          sudo mv crane /usr/local/bin/
+          crane version
+
+      - name: Log in to registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+
+      - name: Get short SHA
+        id: vars
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          echo "SHORT_SHA=${short_sha}" >> "$GITHUB_ENV"
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Promote Dev image to Stage
+        run: |
+          crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
+          crane copy ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging
+
+      - name: Scan Stage image for vulnerabilities
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
+          format: table
+          output: trivy-report.txt
+          exit-code: '1'
+
+      - name: Add vulnerability scan result to summary
+        if: always()
+        run: |
+          {
+            echo "## Stage Vulnerability Scan"
+            echo
+            if [ -s trivy-report.txt ]; then
+              echo '```text'
+              cat trivy-report.txt
+              echo '```'
+            elif [ "${{ steps.trivy.outcome }}" = "failure" ]; then
+              echo "Trivy failed before producing a report."
+              echo
+              echo "Image: \`${REGISTRY_HOST}/stg/${IMAGE_NAME}:${SHORT_SHA}\`"
+            else
+              echo "No vulnerability scan findings reported."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail vulnerability scan on findings
+        if: steps.trivy.outcome == 'failure'
+        run: exit 1
