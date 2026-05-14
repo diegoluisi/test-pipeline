@@ -51,13 +51,11 @@ jobs:
           format: table
           exit-code: '1'
 
-      - name: Sign Prod image with Cosign
-        uses: sigstore/cosign-action@v2.0.0
-        with:
-          command: sign
-          image: ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}-prd
-          key: ${{ env.COSIGN_KEY }}
-          password: ${{ env.COSIGN_PASSWORD }}
+      - name: cosign-installer
+        uses: sigstore/cosign-installer@v2.0.0
+
+      - name: Sign image with Cosign
+        run: cosign sign --key cosign.key ${{ env.REGISTRY_HOST }}/${{ github.actor }}/${{ env.IMAGE_NAME }}:${{ github.run_id }}
 
   semantic-release:
     name: Semantic Release 🚀
