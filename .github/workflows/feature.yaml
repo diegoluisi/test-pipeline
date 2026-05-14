@@ -23,17 +23,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
 
-      - name: Lint Dockerfile
-        id: hadolint
-        continue-on-error: true
-        uses: hadolint/hadolint-action@v3.3.0
-        with:
-          dockerfile: Dockerfile
-          output-file: hadolint-report.txt
-
-      - name: Add Dockerfile lint result to summary
-        if: always()
+      - name: Lint Dockerfile and add result to summary
         run: |
+          set +e
+          docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile > hadolint-report.txt 2>&1
+          hadolint_status=$?
+
           {
             echo "## Dockerfile Lint"
             echo
@@ -46,9 +41,7 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Fail Dockerfile lint on issues
-        if: steps.hadolint.outcome == 'failure'
-        run: exit 1
+          exit "$hadolint_status"
 
   build-image:
     name: Build Docker Image 🏗️
