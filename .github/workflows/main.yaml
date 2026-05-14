@@ -14,12 +14,64 @@ env:
   COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
 
 jobs:
+  vulnerability-scans:
+    name: Vulnerability Scans 🛡
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+
+      - name: Scan Staging image for vulnerabilities
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging
+          format: table
+          output: trivy-report.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Add vulnerability scan result to summary
+        if: always()
+        run: |
+          {
+            echo "## Staging Vulnerability Scan"
+            echo
+            if [ -s trivy-report.txt ]; then
+              echo '```text'
+              cat trivy-report.txt
+              echo '```'
+            elif [ "${{ steps.trivy.outcome }}" = "failure" ]; then
+              echo "Trivy failed before producing a report."
+              echo
+              echo "Image: \`${REGISTRY_HOST}/stg/${IMAGE_NAME}:staging\`"
+            else
+              echo "No vulnerability scan findings reported."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail vulnerability scan on findings
+        if: steps.trivy.outcome == 'failure'
+        run: |
+          echo "Trivy scan failed for ${REGISTRY_HOST}/stg/${IMAGE_NAME}:staging. Check the Staging Vulnerability Scan summary above."
+          if [ -s trivy-report.txt ]; then
+            echo
+            cat trivy-report.txt
+          fi
+          exit 1
+
   crane:
     name: Promote to Prod 🚀
     runs-on: ubuntu-latest
+    needs: vulnerability-scans
     outputs:
       image_ref: ${{ steps.vars.outputs.image_ref }}
-      short_sha: ${{ steps.vars.outputs.short_sha }}
     steps:
       - name: Install Crane
         run: |
@@ -36,21 +88,18 @@ jobs:
           username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ env.REGISTRY_PASSWORD }}
 
-      - name: Get short SHA
+      - name: Set prod image reference
         id: vars
         run: |
-          short_sha="${GITHUB_SHA::7}"
-          image_ref="${REGISTRY_HOST}/prd/${IMAGE_NAME}:${short_sha}-prd"
-          echo "SHORT_SHA=${short_sha}" >> "$GITHUB_ENV"
-          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          image_ref="${REGISTRY_HOST}/prd/${IMAGE_NAME}:latest"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Promote Stage image to Prod using Crane
         run: |
           crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ steps.vars.outputs.image_ref }}
 
-  vulnerability-scans:
-    name: Vulnerability Scans 🛡
+  cosign:
+    name: Sign Prod Image with Cosign 🔏
     runs-on: ubuntu-latest
     needs: crane
     steps:
@@ -61,57 +110,8 @@ jobs:
           username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ env.REGISTRY_PASSWORD }}
 
-      - name: Scan Prod image for vulnerabilities
-        id: trivy
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ needs.crane.outputs.image_ref }}
-          format: table
-          output: trivy-report.txt
-          exit-code: '1'
-
-      - name: Add vulnerability scan result to summary
-        if: always()
-        run: |
-          {
-            echo "## Prod Vulnerability Scan"
-            echo
-            if [ -s trivy-report.txt ]; then
-              echo '```text'
-              cat trivy-report.txt
-              echo '```'
-            elif [ "${{ steps.trivy.outcome }}" = "failure" ]; then
-              echo "Trivy failed before producing a report."
-              echo
-              echo "Image: \`${{ needs.crane.outputs.image_ref }}\`"
-            else
-              echo "No vulnerability scan findings reported."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Fail vulnerability scan on findings
-        if: steps.trivy.outcome == 'failure'
-        run: |
-          echo "Trivy scan failed for ${{ needs.crane.outputs.image_ref }}. Check the Prod Vulnerability Scan summary above."
-          exit 1
-
-  cosign:
-    name: Sign Prod Image with Cosign 🔏
-    runs-on: ubuntu-latest
-    needs:
-      - crane
-      - vulnerability-scans
-    steps:
-      - name: Log in to registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY_HOST }}
-          username: ${{ env.REGISTRY_USERNAME }}
-          password: ${{ env.REGISTRY_PASSWORD }}
-
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v2.0.0
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Sign image with Cosign
         run: cosign sign --yes --key env://COSIGN_KEY ${{ needs.crane.outputs.image_ref }}
