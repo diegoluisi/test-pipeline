@@ -86,28 +86,18 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ github.repository }}:${{ github.sha }}
-          format: table
-          output: trivy-report.txt
-          exit-code: '1'
+          format: 'json'
+          output: 'trivy-report.json'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0' # Don't fail here; we already enforced exit-code:1 above
 
-      - name: Add vulnerability scan result to summary
+      - name: Upload scan report as artifact
         if: always()
-        run: |
-          {
-            echo "## Vulnerability Scan"
-            echo
-            if [ -s trivy-report.txt ]; then
-              echo '```text'
-              cat trivy-report.txt
-              echo '```'
-            else
-              echo "No vulnerability scan findings reported."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Fail vulnerability scan on findings
-        if: steps.trivy.outcome == 'failure'
-        run: exit 1
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: trivy-scan-report
+          path: trivy-report.json
+          retention-days: 30
 
   sbom-report:
     name: Generate SBOM 📊
