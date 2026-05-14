@@ -98,7 +98,7 @@ jobs:
         id: prod_image
         run: |
           short_sha="${GITHUB_SHA::7}"
-          image_ref="${REGISTRY_HOST}/prd/${IMAGE_NAME}:${short_sha}-prd"
+          image_ref="${REGISTRY_HOST}/prd/${IMAGE_NAME}:${short_sha}"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Promote Stage image to Prod using Crane
