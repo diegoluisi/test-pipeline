@@ -1,5 +1,22 @@
 # Semantic Versioning Changelog
 
+# [1.1.0](https://github.com/diegoluisi/test-pipeline/compare/v1.0.0...v1.1.0) (2026-05-14)
+
+
+### Features
+
+* **devops:** Adjust to push to harbor ([04d9583](https://github.com/diegoluisi/test-pipeline/commit/04d95832f0352d6f1c9a5e2fdb4b13d8fae06dfb))
+* **devops:** Adjust to push to harbor ([69ca71a](https://github.com/diegoluisi/test-pipeline/commit/69ca71ab6d1d7f9b4380ae63921d538feb38db08))
+* **devops:** Adjust to push to harbor ([23bcea2](https://github.com/diegoluisi/test-pipeline/commit/23bcea298b1b08219a3f776f94971b214e844b15))
+* **devops:** Adjust to push to harbor ([b147d84](https://github.com/diegoluisi/test-pipeline/commit/b147d84046b178e1760b1a73239739114c74e1fe))
+* **devops:** Adjust to push to harbor ([577fe81](https://github.com/diegoluisi/test-pipeline/commit/577fe81e6bc25a864620e16a2e97297292a81514))
+* **devops:** Adjust to push to harbor ([68fd916](https://github.com/diegoluisi/test-pipeline/commit/68fd9166d2e4c0f456777b863f4d5c7b89500b47))
+* **devops:** Adjust to push to harbor ([f9187ff](https://github.com/diegoluisi/test-pipeline/commit/f9187ff6bd3be0bc3f09b02afbd64bc1e0000b17))
+* **devops:** Adjust to push to harbor ([456c445](https://github.com/diegoluisi/test-pipeline/commit/456c445e9e00cb60ceac52b907b269dc5185f6c3))
+* **devops:** Adjust to push to harbor ([5582ab5](https://github.com/diegoluisi/test-pipeline/commit/5582ab5d4c2d817405f1091b1d196056d0ce921a))
+* **devops:** Adjust to push to harbor ([bb30ada](https://github.com/diegoluisi/test-pipeline/commit/bb30ada92f0697c5703cf4f7bb468849258eef9e))
+* **devops:** Adjust to push to harbor ([0aaf569](https://github.com/diegoluisi/test-pipeline/commit/0aaf56923a5004cfab8335875f1184d82ac63d49))
+
 # 1.0.0 (2026-05-14)
 
 
