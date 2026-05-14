@@ -1,9 +1,14 @@
-name: Main Pipeline
+name: Main Workflow 🚀
 
 on:
   push:
     branches:
       - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
 
 env:
   IMAGE_NAME: test-pipeline
@@ -12,17 +17,105 @@ env:
   REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
   COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
   COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+  COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
 
 jobs:
-  promote-to-prod:
+  vulnerability-scans:
+    name: Vulnerability Scans 🛡
     runs-on: ubuntu-latest
+    steps:
+      - name: Log in to registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+
+      - name: Scan Staging image for vulnerabilities
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging
+          format: table
+          output: trivy-report.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Add vulnerability scan result to summary
+        if: always()
+        run: |
+          {
+            echo "## Staging Vulnerability Scan"
+            echo
+            if [ -s trivy-report.txt ]; then
+              echo '```text'
+              cat trivy-report.txt
+              echo '```'
+            elif [ "${{ steps.trivy.outcome }}" = "failure" ]; then
+              echo "Trivy failed before producing a report."
+              echo
+              echo "Image: \`${REGISTRY_HOST}/stg/${IMAGE_NAME}:staging\`"
+            else
+              echo "No vulnerability scan findings reported."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail vulnerability scan on findings
+        if: steps.trivy.outcome == 'failure'
+        run: |
+          echo "Trivy scan failed for ${REGISTRY_HOST}/stg/${IMAGE_NAME}:staging. Check the Staging Vulnerability Scan summary above."
+          if [ -s trivy-report.txt ]; then
+            echo
+            cat trivy-report.txt
+          fi
+          exit 1
+
+  semantic-release:
+    name: Semantic Release 🚀
+    runs-on: ubuntu-latest
+    needs: vulnerability-scans
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install semantic-release
+        run: |
+          npm install --no-save \
+            semantic-release \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/changelog \
+            @semantic-release/git \
+            @semantic-release/github \
+            @semantic-release/npm
+
+      - name: Run semantic-release
+        run: npx semantic-release --debug
+
+  crane:
+    name: Promote to Prod 🚀
+    runs-on: ubuntu-latest
+    needs: semantic-release
     steps:
       - name: Install Crane
         run: |
-          curl -Lo crane.tar.gz https://github.com/google/go-containerregistry/releases/download/v0.19.0/go-containerregistry_Linux_x86_64.tar.gz
+          curl --fail --location --show-error --output crane.tar.gz https://github.com/google/go-containerregistry/releases/download/v0.19.0/go-containerregistry_Linux_x86_64.tar.gz
           tar -xzf crane.tar.gz crane
           chmod +x crane
           sudo mv crane /usr/local/bin/
+          crane version
 
       - name: Log in to registry
         uses: docker/login-action@v4
@@ -31,49 +124,55 @@ jobs:
           username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ env.REGISTRY_PASSWORD }}
 
-      - name: Get short SHA
-        run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-
       - name: Promote Stage image to Prod using Crane
         run: |
-          crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:latest-stage ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}-prd
+          crane copy ${{ env.REGISTRY_HOST }}/stg/${{ env.IMAGE_NAME }}:staging ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:latest
 
-      - name: Scan Prod image for vulnerabilities
-        uses: aquasecurity/trivy-action@v2
-        with:
-          image-ref: ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}-prd
-          format: table
-          exit-code: '1'
-
-      - name: Sign Prod image with Cosign
-        uses: sigstore/cosign-action@v2
-        with:
-          command: sign
-          image: ${{ env.REGISTRY_HOST }}/prd/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}-prd
-          key: ${{ env.COSIGN_KEY }}
-          password: ${{ env.COSIGN_PASSWORD }}
-
-  semantic-release:
-    needs: promote-to-prod
+  cosign:
+    name: Attach SBOM and Sign Prod Image 🔏
     runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
-      DOCKER_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+    needs: crane
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6.0.2
+      - name: Log in to registry
+        uses: docker/login-action@v4
         with:
-          fetch-depth: 0
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
 
-      - name: Install semantic-release
-        run: npm install -g semantic-release @semantic-release/git @codedependant/semantic-release-docker
+      - name: Install Crane
+        run: |
+          curl --fail --location --show-error --output crane.tar.gz https://github.com/google/go-containerregistry/releases/download/v0.19.0/go-containerregistry_Linux_x86_64.tar.gz
+          tar -xzf crane.tar.gz crane
+          chmod +x crane
+          sudo mv crane /usr/local/bin/
+          crane version
 
-      - name: Run semantic-release
-        run: npx semantic-release
+      - name: Install Syft
+        run: |
+          curl --fail --silent --show-error --location https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          syft version
+
+      - name: Resolve prod image digest
+        id: prod_image
+        run: |
+          image="${REGISTRY_HOST}/prd/${IMAGE_NAME}:latest"
+          digest="$(crane digest "$image")"
+          image_digest="${REGISTRY_HOST}/prd/${IMAGE_NAME}@${digest}"
+
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "image_digest=${image_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate and attach SBOM
+        run: |
+          syft ${{ steps.prod_image.outputs.image_digest }} -o spdx-json=sbom.spdx.json
+          cosign attach sbom --yes --sbom sbom.spdx.json ${{ steps.prod_image.outputs.image_digest }}
+
+      - name: Sign image digest with Cosign
+        run: cosign sign --yes --key env://COSIGN_KEY ${{ steps.prod_image.outputs.image_digest }}
+
+      - name: Verify Cosign signature
+        run: cosign verify --key env://COSIGN_PUBLIC_KEY ${{ steps.prod_image.outputs.image_digest }}

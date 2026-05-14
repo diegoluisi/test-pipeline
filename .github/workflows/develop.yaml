@@ -5,6 +5,11 @@ on:
     branches:
       - develop
 
+permissions:
+  contents: read
+  attestations: write
+  id-token: write
+
 env:
   IMAGE_NAME: test-pipeline
   REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
@@ -34,6 +39,7 @@ jobs:
         run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Build and Push Dev image
+        id: build_and_push
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -41,3 +47,10 @@ jobs:
           tags: |
             ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
             ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}:develop
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.REGISTRY_HOST }}/dev/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build_and_push.outputs.digest }}
+          push-to-registry: true

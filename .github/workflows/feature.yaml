@@ -14,9 +14,39 @@ env:
   IMAGE_NAME: test-pipeline
 
 jobs:
+  product-level-test:
+    name: Product Level Test 🧪
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Run product-level test
+        id: product_level_test
+        continue-on-error: true
+        run: |
+          set +e
+          make product-level-test > product-level-test.log 2>&1
+          test_status=$?
+
+          {
+            echo "## Product Level Test"
+            echo
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            if [ "$test_status" -eq 0 ]; then
+              echo "| \`make product-level-test\` | Passed |"
+            else
+              echo "| \`make product-level-test\` | Failed |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$test_status"
+
   dockerfile-lint:
     name: Dockerfile Lint 🐳
     runs-on: ubuntu-latest
+    needs: product-level-test
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
