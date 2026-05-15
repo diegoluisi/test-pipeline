@@ -150,7 +150,7 @@ jobs:
 
           cosign verify --key env://COSIGN_PUBLIC_KEY "${{ steps.promote.outputs.image_digest }}" | tee cosign-verify.json
           jq -e --arg git_sha "${GITHUB_SHA}" --arg image_tag "${{ steps.promote.outputs.image }}" \
-            '.[0].optional.git_sha == $git_sha and .[0].optional.image_tag == $image_tag' \
+            'any(.[]; .optional.git_sha == $git_sha and .optional.image_tag == $image_tag)' \
             cosign-verify.json
 
           signature_ref="$(cosign triangulate "${{ steps.promote.outputs.image_digest }}")"
