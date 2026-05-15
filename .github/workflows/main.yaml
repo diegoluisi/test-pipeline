@@ -132,13 +132,13 @@ jobs:
 
           cosign sign --yes \
             --key env://COSIGN_KEY \
-            -a repository=${{ github.repository }} \
-            -a workflow=${{ github.workflow }} \
-            -a run_id=${{ github.run_id }} \
-            -a git_ref=${{ github.ref_name }} \
-            -a git_sha=${{ github.sha }} \
-            -a image_tag=${{ steps.promote.outputs.image }} \
-            ${{ steps.promote.outputs.image_digest }}
+            -a "repository=${{ github.repository }}" \
+            -a "workflow=${{ github.workflow }}" \
+            -a "run_id=${{ github.run_id }}" \
+            -a "git_ref=${{ github.ref_name }}" \
+            -a "git_sha=${{ github.sha }}" \
+            -a "image_tag=${{ steps.promote.outputs.image }}" \
+            "${{ steps.promote.outputs.image_digest }}"
 
       - name: Verify Cosign signature
         id: verify_signature
@@ -148,24 +148,24 @@ jobs:
             exit 1
           fi
 
-          cosign verify --key env://COSIGN_PUBLIC_KEY ${{ steps.promote.outputs.image_digest }} | tee cosign-verify.json
+          cosign verify --key env://COSIGN_PUBLIC_KEY "${{ steps.promote.outputs.image_digest }}" | tee cosign-verify.json
           jq -e --arg git_sha "${GITHUB_SHA}" --arg image_tag "${{ steps.promote.outputs.image }}" \
             '.[0].optional.git_sha == $git_sha and .[0].optional.image_tag == $image_tag' \
             cosign-verify.json
 
-          signature_ref="$(cosign triangulate ${{ steps.promote.outputs.image_digest }})"
+          signature_ref="$(cosign triangulate "${{ steps.promote.outputs.image_digest }}")"
           echo "signature_ref=${signature_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Attach SBOM to signed image
-        run: cosign attach sbom --sbom sbom.spdx.json ${{ steps.promote.outputs.image_digest }}
+        run: cosign attach sbom --sbom sbom.spdx.json "${{ steps.promote.outputs.image_digest }}"
 
       - name: Verify SBOM attachment
         id: verify_sbom
         run: |
-          cosign download sbom ${{ steps.promote.outputs.image_digest }} > downloaded-sbom.spdx.json
+          cosign download sbom "${{ steps.promote.outputs.image_digest }}" > downloaded-sbom.spdx.json
           test -s downloaded-sbom.spdx.json
 
-          sbom_ref="$(cosign triangulate --type sbom ${{ steps.promote.outputs.image_digest }})"
+          sbom_ref="$(cosign triangulate --type sbom "${{ steps.promote.outputs.image_digest }}")"
           echo "sbom_ref=${sbom_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Add signing result to summary
